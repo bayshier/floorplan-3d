@@ -144,6 +144,39 @@
         #sel-info { font-size: 12px; color: var(--dim); line-height: 1.8; }
         #sel-info b { color: var(--warn); }
 
+        /* ---------- 启动屏 ---------- */
+        #splash {
+            position: fixed; inset: 0;
+            z-index: 500;
+            background: radial-gradient(ellipse at 50% 30%, #1c2740, #0d1320 75%);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            gap: 16px;
+            cursor: pointer;
+            transition: opacity 0.5s;
+        }
+        #splash.hide { opacity: 0; pointer-events: none; }
+        #splash img {
+            max-width: min(88vw, 640px);
+            max-height: 62vh;
+            border-radius: 22px;
+            box-shadow: 0 20px 80px rgba(77, 163, 255, 0.25);
+        }
+        #splash .splash-title {
+            color: var(--text); font-weight: 800;
+            font-size: clamp(20px, 4vw, 30px); letter-spacing: 2px;
+        }
+        #splash .splash-hint { color: var(--dim); font-size: 12px; letter-spacing: 1px; }
+        #splash-enter {
+            background: linear-gradient(135deg, var(--accent), #7a6bff);
+            color: #fff; font-weight: 800; font-size: 17px;
+            border: none; border-radius: 30px;
+            padding: 14px 52px;
+            box-shadow: 0 6px 24px rgba(77, 163, 255, 0.4);
+            letter-spacing: 2px;
+        }
+        #splash-enter:hover { transform: translateY(-2px); }
+
         /* toast */
         #toast {
             position: fixed;
@@ -162,6 +195,14 @@
 </head>
 
 <body>
+    <!-- ===== 启动屏：AI 主视觉 ===== -->
+    <div id="splash">
+        <img src="assets/hero.png" alt="户型装修设计">
+        <div class="splash-title">户型装修设计 · 2D/3D</div>
+        <button id="splash-enter">🛋 开始设计</button>
+        <div class="splash-hint">2D 摆家具 · 3D 漫游 · AI 插画素材</div>
+    </div>
+
     <!-- ===== 顶栏 ===== -->
     <div id="topbar">
         <span class="title">🏠 户型装修设计</span>
@@ -361,6 +402,26 @@
             carpet:  { name: '地毯',   price: 120, color: 0xc9b8a6 }
         };
 
+        /* ---------- AI 生成素材预加载（俯视图标 + 地板纹理） ---------- */
+        var ICON_IMGS = {}, FLOOR_IMGS = {};
+        var iconIds = {
+            bed2: 'bed2', bed1: 'bed2', nstand: 'nstand', ward: 'ward', dress: 'dress',
+            sofa3: 'sofa3', sofa1: 'sofa3', ctable: 'ctable', tvstand: 'tvstand', tv: 'tv',
+            plant: 'plant', dtable: 'dtable', dchair: 'dchair', cab: 'cab', stove: 'stove',
+            fridge: 'fridge', toilet: 'toilet', sink: 'sink', shower: 'shower',
+            washer: 'washer', desk: 'desk', chair: 'chair', bshelf: 'bshelf'
+        };
+        Object.keys(iconIds).forEach(function (id) {
+            var im = new Image();
+            im.onload = function () { ICON_IMGS[id] = im; if (mode === '2d') draw2D(); };
+            im.src = 'assets/icons/' + iconIds[id] + '.png';
+        });
+        ['wood', 'tile', 'marble', 'terrazzo', 'carpet'].forEach(function (k) {
+            var im = new Image();
+            im.onload = function () { FLOOR_IMGS[k] = im; if (mode === '2d') draw2D(); };
+            im.src = 'assets/floors/' + k + '.png';
+        });
+
         /* ============================================================
          * 三、状态与存档
          * ============================================================ */
@@ -516,9 +577,22 @@
             /* 房间：底色 + 名称 + 面积 */
             plan.rooms.forEach(function (r) {
                 var a = w2s(r.x, r.y);
-                ctx.fillStyle = MATS[r.mat] ? MATS[r.mat].hex || 'rgba(77,163,255,0.06)' : 'rgba(77,163,255,0.06)';
-                ctx.fillStyle = 'rgba(77,163,255,0.07)';
-                ctx.fillRect(a.x, a.y, r.w * cam.zoom, r.h * cam.zoom);
+                var rw = r.w * cam.zoom, rh = r.h * cam.zoom;
+                var tex = FLOOR_IMGS[r.mat];
+                if (tex) {
+                    /* 地板纹理：世界锚定的图案填充（每格纹理≈2400mm） */
+                    var pat = ctx.createPattern(tex, 'repeat');
+                    var sc = (2400 * cam.zoom) / tex.width;
+                    var org = w2s(0, 0);
+                    if (pat.setTransform) pat.setTransform(new DOMMatrix().translate(org.x, org.y).scale(sc));
+                    ctx.fillStyle = pat;
+                    ctx.fillRect(a.x, a.y, rw, rh);
+                    ctx.fillStyle = 'rgba(13,19,32,0.12)';
+                    ctx.fillRect(a.x, a.y, rw, rh);
+                } else {
+                    ctx.fillStyle = 'rgba(77,163,255,0.07)';
+                    ctx.fillRect(a.x, a.y, rw, rh);
+                }
                 var size = Math.max(11, Math.min(20, r.w * cam.zoom / 8));
                 ctx.fillStyle = '#c8d4ea';
                 ctx.font = 'bold ' + size + 'px sans-serif';
@@ -609,6 +683,29 @@
             ctx.translate(a.x, a.y);
             ctx.rotate(f.rot * Math.PI / 180);
             var w = t.w * cam.zoom, d = t.d * cam.zoom;
+
+            /* 有 AI 图标：透明背景俯视图标直接绘制（cover-fit + 柔和投影） */
+            var icon = ICON_IMGS[f.t];
+            if (icon) {
+                var cov = Math.max(w / icon.width, d / icon.height);
+                var dw2 = icon.width * cov, dh2 = icon.height * cov;
+                ctx.save();
+                ctx.shadowColor = 'rgba(10, 16, 28, 0.35)';
+                ctx.shadowBlur = Math.max(4, cam.zoom * 30);
+                ctx.shadowOffsetY = Math.max(2, cam.zoom * 16);
+                ctx.drawImage(icon, -dw2 / 2, -dh2 / 2, dw2, dh2);
+                ctx.restore();
+                if (selected) {
+                    ctx.strokeStyle = '#ffb14d';
+                    ctx.setLineDash([5, 4]);
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(-w / 2 - 4, -d / 2 - 4, w + 8, d + 8);
+                    ctx.setLineDash([]);
+                }
+                ctx.restore();
+                ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+                return;
+            }
             ctx.fillStyle = t.c;
             ctx.strokeStyle = selected ? '#ffb14d' : '#0e1524';
             ctx.lineWidth = selected ? 2.5 : 1.5;
@@ -951,6 +1048,17 @@
         });
         $('section').addEventListener('change', function () {
             if (window.Floor3D) window.Floor3D.setSection(this.checked);
+        });
+
+        /* 启动屏：点击任意处进入 */
+        $('splash-enter').addEventListener('click', function (e) {
+            e.stopPropagation();
+            $('splash').classList.add('hide');
+            setTimeout(function () { $('splash').style.display = 'none'; }, 520);
+        });
+        $('splash').addEventListener('click', function () {
+            $('splash').classList.add('hide');
+            setTimeout(function () { $('splash').style.display = 'none'; }, 520);
         });
 
         /* ============================================================

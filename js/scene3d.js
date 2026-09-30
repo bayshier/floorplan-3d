@@ -127,13 +127,38 @@
         });
     }
 
+    /* ---------- 地板纹理（AI 生成，异步加载后自动重建地板） ---------- */
+    var FLOOR_TEX = {}, FLOOR_TEX_PENDING = {};
+    function ensureFloorTex(matName) {
+        if (FLOOR_TEX[matName]) return FLOOR_TEX[matName];
+        if (FLOOR_TEX_PENDING[matName]) return null;
+        FLOOR_TEX_PENDING[matName] = true;
+        new THREE.TextureLoader().load('assets/floors/' + matName + '.png', function (tex) {
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.encoding = THREE.sRGBEncoding;
+            FLOOR_TEX[matName] = tex;
+            if (scene) rebuild();                        // 纹理到位后重建地板
+        });
+        return null;
+    }
+
     /* ================= 地板与房间 ================= */
     function buildFloors(group) {
         plan.rooms.forEach(function (r) {
-            var color = MATS_INDEX[r.mat] || 0xd9d9d4;
+            var tex = ensureFloorTex(r.mat);
+            var material;
+            if (tex) {
+                var t2 = tex.clone();
+                t2.needsUpdate = true;
+                t2.wrapS = t2.wrapT = THREE.RepeatWrapping;
+                t2.repeat.set(r.w / 2200, r.h / 2200);   // 每格纹理≈2.2m
+                material = new THREE.MeshStandardMaterial({ map: t2, roughness: 0.9 });
+            } else {
+                material = mat(MATS_INDEX[r.mat] || 0xd9d9d4, 0.9);
+            }
             var m = new THREE.Mesh(
                 new THREE.BoxGeometry(r.w, 30, r.h),
-                mat(color, 0.9)
+                material
             );
             m.position.set(r.x + r.w / 2, 15, r.y + r.h / 2);
             m.receiveShadow = true;
