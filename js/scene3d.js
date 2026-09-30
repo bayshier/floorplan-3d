@@ -434,7 +434,8 @@
             camera.lookAt(controls.target);
             this.fit();
             this.resize();
-            setWalk(false);
+            var self = this;
+            self.setWalk(false);
             if (!raf) animate();
         },
         sync: function (p) { plan = p; if (scene) { rebuild(); applyNight(); } },
