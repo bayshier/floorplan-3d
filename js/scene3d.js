@@ -300,6 +300,110 @@
                 }
                 break;
             }
+            /* ---------- 宠物·玩偶 ---------- */
+            case 'petcat': case 'petcat2': {
+                /* 蜷睡的猫：椭球身子 + 圆头 + 三角耳 + 盘尾 */
+                var catFur = mat(f.t === 'petcat' ? 0xe8964a : 0xe8e0d8, 0.95);
+                var catBody = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 14), catFur);
+                catBody.scale.set(w * 0.42, h * 0.5, d * 0.5);
+                catBody.position.y = h * 0.42; catBody.castShadow = true;
+                g.add(catBody);
+                var catHead = new THREE.Mesh(new THREE.SphereGeometry(w * 0.21, 16, 12), catFur);
+                catHead.position.set(w * 0.24, h * 0.62, d * 0.14); catHead.castShadow = true;
+                g.add(catHead);
+                [-1, 1].forEach(function (sd) {
+                    var ear = new THREE.Mesh(new THREE.ConeGeometry(w * 0.07, w * 0.13, 4), catFur);
+                    ear.position.set(w * 0.24 + sd * w * 0.13, h * 0.88, d * 0.12);
+                    ear.rotation.z = sd * 0.3; g.add(ear);
+                });
+                var tail = new THREE.Mesh(new THREE.TorusGeometry(w * 0.16, w * 0.045, 8, 16, Math.PI * 1.2), catFur);
+                tail.position.set(-w * 0.18, h * 0.28, d * 0.3);
+                tail.rotation.x = Math.PI / 2; tail.castShadow = true;
+                g.add(tail);
+                break;
+            }
+            case 'petdog': {
+                /* 趴睡的柯基：长椭球身 + 圆头 + 垂耳 + 短腿 */
+                var dogFur = mat(0xe8964a, 0.95);
+                var dogBody = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 14), dogFur);
+                dogBody.scale.set(w * 0.4, h * 0.42, d * 0.42);
+                dogBody.position.y = h * 0.4; dogBody.castShadow = true;
+                g.add(dogBody);
+                var dogHead = new THREE.Mesh(new THREE.SphereGeometry(w * 0.2, 16, 12), dogFur);
+                dogHead.position.set(w * 0.3, h * 0.62, 0); dogHead.castShadow = true;
+                g.add(dogHead);
+                var snout = new THREE.Mesh(new THREE.SphereGeometry(w * 0.09, 12, 10), M.white);
+                snout.position.set(w * 0.44, h * 0.55, 0); g.add(snout);
+                [-1, 1].forEach(function (sd) {
+                    var ear = new THREE.Mesh(new THREE.SphereGeometry(w * 0.09, 10, 8), dogFur);
+                    ear.scale.set(0.6, 1.4, 0.9);
+                    ear.position.set(w * 0.22, h * 0.78, sd * w * 0.13);
+                    ear.rotation.z = sd * 0.5; g.add(ear);
+                });
+                break;
+            }
+            case 'litter': {
+                /* 猫砂盆：围栏四边 + 砂堆 + 两颗「遗产」 */
+                var wallM = mat(0x9fb4c4);
+                g.add(box(w, 40, d, mat(0xf0ead8), 0, 20, 0));                 // 砂底
+                g.add(box(w, 210, 30, wallM, 0, 105, -d / 2 + 15));
+                g.add(box(w, 210, 30, wallM, 0, 105, d / 2 - 15));
+                g.add(box(30, 210, d - 60, wallM, -w / 2 + 15, 105, 0));
+                g.add(box(30, 210, d - 60, wallM, w / 2 - 15, 105, 0));
+                for (var ls = 0; ls < 3; ls++) {
+                    var poop = new THREE.Mesh(new THREE.SphereGeometry(26, 8, 6), mat(0x8a6e4a));
+                    poop.position.set((Math.random() - 0.5) * w * 0.4, 46, (Math.random() - 0.5) * d * 0.4);
+                    g.add(poop);
+                }
+                break;
+            }
+            case 'scratch': {
+                var base = cyl(w * 0.46, w * 0.46, h, mat(0xc4a876), 0, h / 2, 0, 24);
+                g.add(base);
+                for (var ring = 1; ring <= 3; ring++) {
+                    var t3 = new THREE.Mesh(new THREE.TorusGeometry(w * 0.46 * ring / 4, 8, 8, 28), mat(0xa8875a));
+                    t3.rotation.x = Math.PI / 2;
+                    t3.position.y = h - 4;
+                    g.add(t3);
+                }
+                break;
+            }
+            case 'petbed': {
+                var outer = new THREE.Mesh(new THREE.TorusGeometry(w * 0.36, w * 0.12, 12, 28), mat(0xffb6c8, 0.95));
+                outer.rotation.x = Math.PI / 2;
+                outer.position.y = h * 0.55; outer.castShadow = true;
+                g.add(outer);
+                var cush = new THREE.Mesh(new THREE.SphereGeometry(w * 0.3, 16, 12), mat(0xfff3e4, 0.95));
+                cush.scale.y = 0.25; cush.position.y = 30;
+                g.add(cush);
+                break;
+            }
+            case 'plush': {
+                var fur2 = mat(0xb08050, 0.95);
+                var pb = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 12), fur2);
+                pb.scale.set(w * 0.3, h * 0.28, d * 0.3); pb.position.y = h * 0.32; pb.castShadow = true;
+                g.add(pb);
+                var ph = new THREE.Mesh(new THREE.SphereGeometry(w * 0.22, 14, 12), fur2);
+                ph.position.set(0, h * 0.68, d * 0.1); ph.castShadow = true;
+                g.add(ph);
+                [-1, 1].forEach(function (sd) {
+                    var ear2 = new THREE.Mesh(new THREE.SphereGeometry(w * 0.08, 10, 8), fur2);
+                    ear2.position.set(sd * w * 0.16, h * 0.86, d * 0.08); g.add(ear2);
+                    var limb = new THREE.Mesh(new THREE.SphereGeometry(w * 0.1, 10, 8), fur2);
+                    limb.position.set(sd * w * 0.3, h * 0.4, d * 0.14); g.add(limb);
+                });
+                break;
+            }
+            case 'bowl': {
+                g.add(box(w, 30, d, mat(0xffb6c8), 0, 15, 0));
+                [-1, 1].forEach(function (sd) {
+                    var b2 = cyl(w * 0.16, w * 0.2, 70, M.white, sd * w * 0.22, 50, 0, 18);
+                    g.add(b2);
+                    var food = cyl(w * 0.11, w * 0.11, 14, mat(sd < 0 ? 0x8a6e4a : 0x6ea8dc), sd * w * 0.22, 92, 0, 14);
+                    g.add(food);
+                });
+                break;
+            }
             default:
                 g.add(box(w, h, d, wood, 0, h / 2, 0));
         }
