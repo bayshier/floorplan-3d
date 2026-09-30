@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="户型装修设计：2D 平面摆放家具、拆改墙体，一键切换 Three.js 3D 鸟瞰与第一人称漫游。纯前端，打开即用。">
+    <title>户型装修设计 · 2D/3D</title>
+    <style>
+        /* ============================================================
+           户型装修设计 · 净室实现
+           布局：顶栏 / 左侧家具库 / 中央画布 / 右侧面板
+           ============================================================ */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bar: #232b3a;
+            --panel: #1b2230;
+            --line: #33405c;
+            --text: #dfe7f3;
+            --dim: #8b98b0;
+            --accent: #4da3ff;
+            --warn: #ffb14d;
+        }
+
+        html, body { height: 100%; }
+
+        body {
+            font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: #121826;
+            color: var(--text);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            font-size: 14px;
+        }
+
+        button {
+            font-family: inherit;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            color: var(--text);
+            border-radius: 6px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        button:hover { border-color: var(--accent); color: var(--accent); }
+        button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+        select, input[type="range"] { font-family: inherit; }
+
+        /* ---------- 顶栏 ---------- */
+        #topbar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            background: var(--bar);
+            border-bottom: 1px solid var(--line);
+            flex-wrap: wrap;
+        }
+        #topbar .title { font-weight: 800; letter-spacing: 1px; margin-right: 8px; }
+        #topbar .sep { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
+        #sunbox { display: none; align-items: center; gap: 6px; }
+        #sunbox.on { display: flex; }
+        #sunbox input { width: 110px; }
+        .spacer { flex: 1; }
+
+        /* ---------- 主区 ---------- */
+        #main { flex: 1; display: flex; min-height: 0; }
+
+        /* 家具库 */
+        #lib {
+            width: 150px;
+            background: var(--panel);
+            border-right: 1px solid var(--line);
+            overflow-y: auto;
+            padding: 8px;
+        }
+        #lib.collapse { display: none; }
+        #lib h4 {
+            font-size: 11px; color: var(--dim);
+            margin: 10px 0 6px; letter-spacing: 1px;
+        }
+        .lib-item {
+            background: #222b3e;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 7px 9px;
+            margin-bottom: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .lib-item:hover { border-color: var(--accent); }
+        .lib-item .dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+
+        /* 画布区 */
+        #cvbox { flex: 1; position: relative; min-width: 0; background: #0d1320; }
+        #cv2d, #cv3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+        #cv3d { display: none; }
+        #mode-tip {
+            position: absolute;
+            left: 10px; bottom: 10px;
+            background: rgba(20, 26, 40, 0.85);
+            border: 1px solid var(--line);
+            color: var(--dim);
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+
+        /* 右侧面板 */
+        #panel {
+            width: 210px;
+            background: var(--panel);
+            border-left: 1px solid var(--line);
+            overflow-y: auto;
+            padding: 10px;
+        }
+        #panel.collapse { display: none; }
+        #panel h4 {
+            font-size: 11px; color: var(--dim);
+            margin: 12px 0 6px; letter-spacing: 1px;
+        }
+        .room-row {
+            display: flex; align-items: center; gap: 6px;
+            padding: 5px 6px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .room-row:hover { background: #222b3e; }
+        .room-row .area { margin-left: auto; color: var(--dim); }
+        .room-row select {
+            background: #222b3e; color: var(--text);
+            border: 1px solid var(--line); border-radius: 4px;
+            font-size: 11px; padding: 2px;
+        }
+        .stat { font-size: 12px; color: var(--dim); line-height: 1.9; }
+        .stat b { color: var(--accent); }
+        .btnrow { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+        #sel-info { font-size: 12px; color: var(--dim); line-height: 1.8; }
+        #sel-info b { color: var(--warn); }
+
+        /* toast */
+        #toast {
+            position: fixed;
+            top: 54px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(35, 43, 58, 0.95);
+            border: 1px solid var(--accent);
+            color: var(--text);
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            display: none;
+            z-index: 300;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ===== 顶栏 ===== -->
+    <div id="topbar">
+        <span class="title">🏠 户型装修设计</span>
+        <button id="m-2d" class="on">2D 平面 (T)</button>
+        <button id="m-3d">3D 场景 (T)</button>
+        <span class="sep"></span>
+        <button id="m-walk" style="display:none;">🚶 漫游</button>
+        <button id="m-orbit" style="display:none;">🔭 鸟瞰</button>
+        <div id="sunbox">
+            <span style="font-size:12px;color:var(--dim)">日照</span>
+            <input type="range" id="sun" min="0" max="180" value="55">
+            <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                <input type="checkbox" id="night"> 夜景
+            </label>
+            <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                <input type="checkbox" id="section"> 剖切墙
+            </label>
+        </div>
+        <span class="spacer"></span>
+        <button id="btn-undo" title="Ctrl+Z">↩ 撤销</button>
+        <button id="btn-redo" title="Ctrl+Shift+Z">↪ 重做</button>
+        <button id="btn-export-json">导出方案</button>
+        <button id="btn-import-json">导入方案</button>
+        <button id="btn-png">导出 PNG</button>
+        <button id="btn-reset-plan">恢复默认户型</button>
+        <input type="file" id="file-json" accept=".json" style="display:none;">
+    </div>
+
+    <!-- ===== 主区 ===== -->
+    <div id="main">
+        <div id="lib"><div style="color:var(--dim);font-size:12px;">加载中…</div></div>
+        <div id="cvbox">
+            <canvas id="cv2d"></canvas>
+            <canvas id="cv3d"></canvas>
+            <div id="mode-tip">2D：拖动家具 · R 旋转 · Delete 删除 · 滚轮缩放 · 空白处拖动平移</div>
+        </div>
+        <div id="panel">
+            <h4>操作</h4>
+            <div class="btnrow">
+                <button id="btn-measure">📐 测量</button>
+                <button id="btn-demowall">🔨 拆墙</button>
+                <button id="btn-fit">适应 (F)</button>
+            </div>
+            <div id="sel-info">未选中家具。<br>从左侧家具库点击添加。</div>
+            <h4>房间 · 面积 · 地板</h4>
+            <div id="rooms"></div>
+            <h4>统计</h4>
+            <div class="stat" id="stats"></div>
+            <h4>说明</h4>
+            <div class="stat">
+                承重墙（深色）不可拆改。<br>
+                3D 漫游：WASD 移动，<br>鼠标转视角，触屏左摇杆。
+            </div>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <!-- Three.js 通过 CDN 加载（首次进入 3D 需联网） -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="js/scene3d.js"></script>
+
+    <script>
+    /* ============================================================
+     * 户型装修设计 · 净室实现（原创代码）
+     * 灵感致敬 wy51ai/floorplan-3d（该仓库无许可证，未使用其代码）
+     * ============================================================ */
+    (function () {
+        'use strict';
+
+        /* ============================================================
+         * 一、家具类型库（尺寸 mm：w 宽 / d 深 / h 高）
+         * ============================================================ */
+        var FURN = [
+            // 卧室
+            { id: 'bed2',   name: '双人床',   g: '卧室', w: 1500, d: 2000, h: 450, c: '#c9a06a' },
+            { id: 'bed1',   name: '单人床',   g: '卧室', w: 1200, d: 2000, h: 450, c: '#c9a06a' },
+            { id: 'nstand', name: '床头柜',   g: '卧室', w: 500,  d: 450,  h: 500, c: '#a97e52' },
+            { id: 'ward',   name: '衣柜',     g: '卧室', w: 1800, d: 600,  h: 2200, c: '#8f6f4e' },
+            { id: 'dress',  name: '梳妆台',   g: '卧室', w: 1000, d: 450,  h: 750, c: '#a97e52' },
+            // 客厅
+            { id: 'sofa3',  name: '三人沙发', g: '客厅', w: 2200, d: 900,  h: 800, c: '#7a8aa8' },
+            { id: 'sofa1',  name: '单人沙发', g: '客厅', w: 900,  d: 900,  h: 800, c: '#7a8aa8' },
+            { id: 'ctable', name: '茶几',     g: '客厅', w: 1100, d: 600,  h: 420, c: '#8f6f4e' },
+            { id: 'tvstand',name: '电视柜',   g: '客厅', w: 1800, d: 420,  h: 450, c: '#5f4a36' },
+            { id: 'tv',     name: '电视',     g: '客厅', w: 1400, d: 90,   h: 820, c: '#1c1f26' },
+            { id: 'plant',  name: '绿植',     g: '客厅', w: 500,  d: 500,  h: 1300, c: '#4e8f4e' },
+            // 餐厨
+            { id: 'dtable', name: '餐桌',     g: '餐厨', w: 1400, d: 800,  h: 740, c: '#8f6f4e' },
+            { id: 'dchair', name: '餐椅',     g: '餐厨', w: 460,  d: 460,  h: 820, c: '#a97e52' },
+            { id: 'cab',    name: '橱柜',     g: '餐厨', w: 1600, d: 600,  h: 820, c: '#98a2ae' },
+            { id: 'stove',  name: '灶台',     g: '餐厨', w: 800,  d: 550,  h: 820, c: '#55606e' },
+            { id: 'fridge', name: '冰箱',     g: '餐厨', w: 700,  d: 700,  h: 1800, c: '#c8ced6' },
+            // 卫浴
+            { id: 'toilet', name: '马桶',     g: '卫浴', w: 420,  d: 680,  h: 760, c: '#e8e8e8' },
+            { id: 'sink',   name: '洗手台',   g: '卫浴', w: 900,  d: 520,  h: 820, c: '#e8e8e8' },
+            { id: 'shower', name: '淋浴房',   g: '卫浴', w: 900,  d: 900,  h: 2000, c: '#bfe0ea' },
+            { id: 'washer', name: '洗衣机',   g: '卫浴', w: 600,  d: 620,  h: 860, c: '#d6dade' },
+            // 书房休闲
+            { id: 'desk',   name: '书桌',     g: '书房', w: 1400, d: 700,  h: 740, c: '#8f6f4e' },
+            { id: 'chair',  name: '书椅',     g: '书房', w: 560,  d: 560,  h: 850, c: '#55606e' },
+            { id: 'bshelf', name: '书架',     g: '书房', w: 1200, d: 350,  h: 1800, c: '#8f6f4e' }
+        ];
+        var FURN_BY_ID = {};
+        FURN.forEach(function (f) { FURN_BY_ID[f.id] = f; });
+
+        /* ============================================================
+         * 二、默认户型（mm，原点左上）
+         * walls: 墙体线段（已在门洞处预先拆分）
+         * bearing: 承重墙不可拆
+         * rooms: 房间矩形（面积/地板/标签）
+         * windows: 外墙窗（3D 玻璃）
+         * ============================================================ */
+        function defaultPlan() {
+            return {
+                walls: [
+                    // 外墙（承重）
+                    { x1: 0, y1: 0, x2: 9600, y2: 0, t: 240, bearing: true },
+                    { x1: 9600, y1: 0, x2: 9600, y2: 7800, t: 240, bearing: true },
+                    { x1: 9600, y1: 7800, x2: 0, y2: 7800, t: 240, bearing: true },
+                    { x1: 0, y1: 7800, x2: 0, y2: 0, t: 240, bearing: true },
+                    // 内墙：主卧与客厅（承重，带主卧门洞 1800-2700）
+                    { x1: 4200, y1: 0, x2: 4200, y2: 1800, t: 240, bearing: true },
+                    { x1: 4200, y1: 2700, x2: 4200, y2: 5100, t: 240, bearing: true },
+                    // 主卧与次卧隔墙（非承重，带次卧门洞 3000-3900）
+                    { x1: 0, y1: 3900, x2: 3000, y2: 3900, t: 200, bearing: false },
+                    { x1: 3900, y1: 3900, x2: 4200, y2: 3900, t: 200, bearing: false },
+                    // 客厅/餐 与 厨房、卫生间（带厨房开敞洞口 6000-6900）
+                    { x1: 4200, y1: 5100, x2: 6000, y2: 5100, t: 200, bearing: false },
+                    { x1: 6900, y1: 5100, x2: 9600, y2: 5100, t: 240, bearing: true },
+                    // 厨房与过道/卫浴隔墙（门洞 6450-7350）
+                    { x1: 6000, y1: 5100, x2: 6000, y2: 6450, t: 200, bearing: false },
+                    { x1: 6000, y1: 7350, x2: 6000, y2: 7800, t: 200, bearing: false },
+                    // 卫生间与过道（门洞 7350-8250）
+                    { x1: 6900, y1: 6450, x2: 7350, y2: 6450, t: 200, bearing: false },
+                    { x1: 8250, y1: 6450, x2: 9600, y2: 6450, t: 200, bearing: false }
+                ],
+                rooms: [
+                    { name: '主卧', x: 0, y: 0, w: 4200, h: 3900, mat: 'wood' },
+                    { name: '次卧', x: 0, y: 3900, w: 4200, h: 3900, mat: 'wood' },
+                    { name: '客厅·餐', x: 4200, y: 0, w: 5400, h: 5100, mat: 'tile' },
+                    { name: '厨房', x: 4200, y: 5100, w: 1800, h: 2700, mat: 'tile' },
+                    { name: '卫浴', x: 6000, y: 6450, w: 3600, h: 1350, mat: 'marble' },
+                    { name: '过道', x: 6000, y: 5100, w: 3600, h: 1350, mat: 'terrazzo' }
+                ],
+                windows: [
+                    { x1: 5400, y1: 0, x2: 7800, y2: 0 },      // 客厅南窗
+                    { x1: 0, y1: 1200, x2: 0, y2: 3000 },      // 主卧西窗
+                    { x1: 0, y1: 4500, x2: 0, y2: 6000 },      // 次卧西窗
+                    { x1: 8200, y1: 7800, x2: 9200, y2: 7800 },// 卫生间北窗
+                    { x1: 4700, y1: 7800, x2: 5600, y2: 7800 } // 厨房北窗
+                ],
+                furniture: [
+                    // 主卧
+                    { t: 'bed2',   x: 2100, y: 1300, rot: 180 },
+                    { t: 'nstand', x: 1050, y: 400,  rot: 0 },
+                    { t: 'nstand', x: 3150, y: 400,  rot: 0 },
+                    { t: 'ward',   x: 900,  y: 3500, rot: 0 },
+                    { t: 'dress',  x: 3300, y: 3400, rot: 270 },
+                    // 次卧
+                    { t: 'bed1',   x: 800,  y: 5000, rot: 180 },
+                    { t: 'desk',   x: 2900, y: 7300, rot: 0 },
+                    { t: 'chair',  x: 2900, y: 6700, rot: 180 },
+                    // 客厅·餐
+                    { t: 'sofa3',  x: 8300, y: 800,  rot: 0 },
+                    { t: 'ctable', x: 8300, y: 1700, rot: 0 },
+                    { t: 'tvstand',x: 8300, y: 2450, rot: 180 },
+                    { t: 'tv',     x: 8300, y: 2560, rot: 180 },
+                    { t: 'dtable', x: 5600, y: 1900, rot: 0 },
+                    { t: 'dchair', x: 5600, y: 1200, rot: 0 },
+                    { t: 'dchair', x: 5600, y: 2600, rot: 180 },
+                    { t: 'dchair', x: 4900, y: 1900, rot: 270 },
+                    { t: 'dchair', x: 6300, y: 1900, rot: 90 },
+                    { t: 'plant',  x: 9200, y: 300,  rot: 0 },
+                    { t: 'sofa1',  x: 4600, y: 700,  rot: 90 },
+                    // 厨房
+                    { t: 'cab',    x: 5100, y: 7400, rot: 180 },
+                    { t: 'stove',  x: 5100, y: 6700, rot: 180 },
+                    { t: 'fridge', x: 4500, y: 5500, rot: 0 },
+                    // 卫浴
+                    { t: 'toilet', x: 9200, y: 6900, rot: 270 },
+                    { t: 'sink',   x: 7200, y: 7500, rot: 180 },
+                    { t: 'shower', x: 6900, y: 6700, rot: 0 },
+                    // 过道
+                    { t: 'washer', x: 9300, y: 5600, rot: 0 }
+                ]
+            };
+        }
+
+        /* 地板材料（含单价 元/㎡，造价按面积加 5% 损耗） */
+        var MATS = {
+            wood:    { name: '木地板', price: 200, color: 0xb58a5a },
+            tile:    { name: '地砖',   price: 150, color: 0xd9d9d4 },
+            marble:  { name: '大理石', price: 400, color: 0xe8e6e0 },
+            terrazzo:{ name: '水磨石', price: 250, color: 0xd7cfc2 },
+            carpet:  { name: '地毯',   price: 120, color: 0xc9b8a6 }
+        };
+
+        /* ============================================================
+         * 三、状态与存档
+         * ============================================================ */
+        var SAVE_KEY = 'floorplan_cn';
+        var plan = null;
+        var undoStack = [], redoStack = [];
+        var mode = '2d';                 // 2d | 3d
+        var tool = 'select';             // select | measure | demowall
+        var sel = -1;                    // 选中家具下标
+        var dirtyTimer = null;
+
+        function loadPlan() {
+            try {
+                var s = localStorage.getItem(SAVE_KEY);
+                if (s) return JSON.parse(s);
+            } catch (e) { }
+            return defaultPlan();
+        }
+        function savePlan() {
+            try { localStorage.setItem(SAVE_KEY, JSON.stringify(plan)); } catch (e) { }
+        }
+        function snapshot() {
+            undoStack.push(JSON.stringify(plan));
+            if (undoStack.length > 60) undoStack.shift();
+            redoStack.length = 0;
+            scheduleSave();
+        }
+        function scheduleSave() {
+            clearTimeout(dirtyTimer);
+            dirtyTimer = setTimeout(savePlan, 400);
+        }
+        function undo() {
+            if (!undoStack.length) return toast('没有可撤销的操作');
+            redoStack.push(JSON.stringify(plan));
+            plan = JSON.parse(undoStack.pop());
+            sel = -1; afterPlanChange();
+        }
+        function redo() {
+            if (!redoStack.length) return toast('没有可重做的操作');
+            undoStack.push(JSON.stringify(plan));
+            plan = JSON.parse(redoStack.pop());
+            sel = -1; afterPlanChange();
+        }
+        /* 结构性修改后：刷新 2D/3D/面板 */
+        function afterPlanChange() {
+            draw2D();
+            renderRoomsPanel();
+            renderStats();
+            savePlan();
+            if (mode === '3d' && window.Floor3D) window.Floor3D.sync(plan);
+        }
+
+        var toastT = null;
+        function toast(msg) {
+            var t = $('toast');
+            t.textContent = msg;
+            t.style.display = 'block';
+            clearTimeout(toastT);
+            toastT = setTimeout(function () { t.style.display = 'none'; }, 1800);
+        }
+        function $(id) { return document.getElementById(id); }
+
+        /* ============================================================
+         * 四、2D 编辑器
+         * ============================================================ */
+        var cv = $('cv2d'), ctx = cv.getContext('2d');
+        var cam = { x: 4800, y: 3900, zoom: 0.14 };      // 视口中心（mm）与缩放
+        var drag = null;                                 // {type, ...}
+        var mouse = { x: 0, y: 0 };                      // 屏幕坐标
+        var measure = null;                              // 测量 {x1,y1,x2,y2}
+
+        function fitView() {
+            var box = $('cvbox').getBoundingClientRect();
+            cv.width = box.width; cv.height = box.height;
+            if (mode === '2d') {
+                cam.zoom = Math.min(cv.width / 10600, cv.height / 8800);
+                cam.x = 4800; cam.y = 3900;
+                draw2D();
+            }
+        }
+        window.addEventListener('resize', function () {
+            var box = $('cvbox').getBoundingClientRect();
+            cv.width = box.width; cv.height = box.height;
+            if (mode === '2d') draw2D();
+            if (mode === '3d' && window.Floor3D) window.Floor3D.resize();
+        });
+
+        /* 屏幕 ↔ 世界（mm） */
+        function s2w(sx, sy) {
+            return { x: (sx - cv.width / 2) / cam.zoom + cam.x, y: (sy - cv.height / 2) / cam.zoom + cam.y };
+        }
+        function w2s(wx, wy) {
+            return { x: (wx - cam.x) * cam.zoom + cv.width / 2, y: (wy - cam.y) * cam.zoom + cv.height / 2 };
+        }
+
+        /* 家具外接框（含旋转） */
+        function furnRect(f) {
+            var t = FURN_BY_ID[f.t];
+            var r = Math.hypot(t.w, t.d) / 2;
+            return { x: f.x - r, y: f.y - r, w: r * 2, h: r * 2, t: t, cx: f.x, cy: f.y };
+        }
+        function furnAt(wx, wy) {
+            for (var i = plan.furniture.length - 1; i >= 0; i--) {
+                var f = plan.furniture[i];
+                var t = FURN_BY_ID[f.t];
+                /* 逆旋转到家具本地坐标判定 */
+                var rad = -f.rot * Math.PI / 180;
+                var dx = wx - f.x, dy = wy - f.y;
+                var lx = dx * Math.cos(rad) - dy * Math.sin(rad);
+                var ly = dx * Math.sin(rad) + dy * Math.cos(rad);
+                if (Math.abs(lx) <= t.w / 2 && Math.abs(ly) <= t.d / 2) return i;
+            }
+            return -1;
+        }
+        /* 点到墙线段距离（拆墙用） */
+        function wallAt(wx, wy) {
+            for (var i = 0; i < plan.walls.length; i++) {
+                var w = plan.walls[i];
+                var dx = w.x2 - w.x1, dy = w.y2 - w.y1;
+                var len2 = dx * dx + dy * dy;
+                var t = len2 ? ((wx - w.x1) * dx + (wy - w.y1) * dy) / len2 : 0;
+                t = Math.max(0, Math.min(1, t));
+                var px = w.x1 + dx * t, py = w.y1 + dy * t;
+                if (Math.hypot(wx - px, wy - py) < w.t / 2 + 80) return i;
+            }
+            return -1;
+        }
+
+        /* ---------- 2D 绘制 ---------- */
+        function draw2D() {
+            ctx.clearRect(0, 0, cv.width, cv.height);
+            ctx.fillStyle = '#0d1320';
+            ctx.fillRect(0, 0, cv.width, cv.height);
+
+            /* 网格（500mm） */
+            var step = 500 * cam.zoom;
+            if (step > 14) {
+                ctx.strokeStyle = 'rgba(70,86,120,0.25)';
+                ctx.lineWidth = 1;
+                var x0 = s2w(0, 0), x1 = s2w(cv.width, cv.height);
+                ctx.beginPath();
+                for (var gx = Math.floor(x0.x / 500) * 500; gx < x1.x; gx += 500) {
+                    var p = w2s(gx, 0);
+                    ctx.moveTo(p.x, 0); ctx.lineTo(p.x, cv.height);
+                }
+                for (var gy = Math.floor(x0.y / 500) * 500; gy < x1.y; gy += 500) {
+                    var p2 = w2s(0, gy);
+                    ctx.moveTo(0, p2.y); ctx.lineTo(cv.width, p2.y);
+                }
+                ctx.stroke();
+            }
+
+            /* 房间：底色 + 名称 + 面积 */
+            plan.rooms.forEach(function (r) {
+                var a = w2s(r.x, r.y);
+                ctx.fillStyle = MATS[r.mat] ? MATS[r.mat].hex || 'rgba(77,163,255,0.06)' : 'rgba(77,163,255,0.06)';
+                ctx.fillStyle = 'rgba(77,163,255,0.07)';
+                ctx.fillRect(a.x, a.y, r.w * cam.zoom, r.h * cam.zoom);
+                var size = Math.max(11, Math.min(20, r.w * cam.zoom / 8));
+                ctx.fillStyle = '#c8d4ea';
+                ctx.font = 'bold ' + size + 'px sans-serif';
+                ctx.textAlign = 'center';
+                var cx = a.x + r.w * cam.zoom / 2, cy = a.y + r.h * cam.zoom / 2;
+                ctx.fillText(r.name, cx, cy - 6);
+                ctx.font = Math.max(10, size - 4) + 'px sans-serif';
+                ctx.fillStyle = '#7f8db0';
+                ctx.fillText((r.w * r.h / 1e6).toFixed(1) + '㎡', cx, cy + size + 4);
+            });
+
+            /* 家具（画在墙下、标注下） */
+            plan.furniture.forEach(function (f, i) {
+                drawFurn2D(f, i === sel);
+            });
+
+            /* 墙体 */
+            plan.walls.forEach(function (w) {
+                var a = w2s(w.x1, w.y1), b = w2s(w.x2, w.y2);
+                ctx.strokeStyle = w.bearing ? '#41506e' : '#5d7099';
+                ctx.lineWidth = Math.max(3, w.t * cam.zoom);
+                ctx.lineCap = 'butt';
+                ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+            });
+            /* 承重墙斜纹标记 */
+            plan.walls.forEach(function (w) {
+                if (!w.bearing) return;
+                var a = w2s(w.x1, w.y1), b = w2s(w.x2, w.y2);
+                var len = Math.hypot(b.x - a.x, b.y - a.y);
+                if (len < 8) return;
+                ctx.save();
+                ctx.strokeStyle = 'rgba(150,170,210,0.35)';
+                ctx.lineWidth = 1;
+                var n = Math.floor(len / 14);
+                ctx.beginPath();
+                for (var i = 0; i <= n; i++) {
+                    var t = i / n;
+                    var px = a.x + (b.x - a.x) * t, py = a.y + (b.y - a.y) * t;
+                    ctx.moveTo(px - 4, py + 4); ctx.lineTo(px + 4, py - 4);
+                }
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            /* 窗（外墙蓝白双线） */
+            ctx.lineWidth = Math.max(3, 100 * cam.zoom);
+            plan.windows.forEach(function (w) {
+                var a = w2s(w.x1, w.y1), b = w2s(w.x2, w.y2);
+                ctx.strokeStyle = '#7fd4ff';
+                ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+                ctx.lineWidth = Math.max(3, 100 * cam.zoom);
+            });
+
+            /* 测量线 */
+            if (measure) {
+                var m1 = w2s(measure.x1, measure.y1), m2 = w2s(measure.x2, measure.y2);
+                ctx.strokeStyle = 'var'; ctx.strokeStyle = '#ffb14d';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.moveTo(m1.x, m1.y); ctx.lineTo(m2.x, m2.y); ctx.stroke();
+                var dist = Math.hypot(measure.x2 - measure.x1, measure.y2 - measure.y1);
+                ctx.fillStyle = '#ffb14d';
+                ctx.font = 'bold 13px monospace';
+                ctx.fillText(Math.round(dist) + ' mm', (m1.x + m2.x) / 2 + 8, (m1.y + m2.y) / 2 - 8);
+                [[m1.x, m1.y], [m2.x, m2.y]].forEach(function (pt) {
+                    ctx.fillRect(pt[0] - 3, pt[1] - 3, 6, 6);
+                });
+            }
+
+            /* 选中家具的高亮框 */
+            if (sel >= 0 && plan.furniture[sel]) {
+                var fr = furnRect(plan.furniture[sel]);
+                var fa = w2s(fr.x, fr.y);
+                ctx.strokeStyle = '#ffb14d';
+                ctx.setLineDash([5, 4]);
+                ctx.strokeRect(fa.x, fa.y, fr.w * cam.zoom, fr.h * cam.zoom);
+                ctx.setLineDash([]);
+            }
+        }
+
+        /* 单件家具的 2D 造型 */
+        function drawFurn2D(f, selected) {
+            var t = FURN_BY_ID[f.t];
+            var a = w2s(f.x, f.y);
+            ctx.save();
+            ctx.translate(a.x, a.y);
+            ctx.rotate(f.rot * Math.PI / 180);
+            var w = t.w * cam.zoom, d = t.d * cam.zoom;
+            ctx.fillStyle = t.c;
+            ctx.strokeStyle = selected ? '#ffb14d' : '#0e1524';
+            ctx.lineWidth = selected ? 2.5 : 1.5;
+            ctx.fillRect(-w / 2, -d / 2, w, d);
+            ctx.strokeRect(-w / 2, -d / 2, w, d);
+            /* 细节 */
+            ctx.strokeStyle = 'rgba(20,26,40,0.5)';
+            ctx.lineWidth = 1;
+            if (f.t === 'bed2' || f.t === 'bed1') {
+                var pw = w * 0.38;
+                ctx.strokeRect(-w / 2 + 8, -d / 2 + 8, pw - 10, d * 0.22);
+                ctx.strokeRect(w / 2 - 8 - pw + 10, -d / 2 + 8, pw - 10, d * 0.22);
+                ctx.beginPath(); ctx.moveTo(-w / 2, -d / 2 + d * 0.32); ctx.lineTo(w / 2, -d / 2 + d * 0.32); ctx.stroke();
+            } else if (f.t === 'sofa3' || f.t === 'sofa1') {
+                ctx.strokeRect(-w / 2 + 4, -d / 2 + 4, w - 8, d * 0.28);
+                ctx.beginPath();
+                ctx.moveTo(-w / 6, -d / 2 + d * 0.28); ctx.lineTo(-w / 6, d / 2 - 4);
+                ctx.moveTo(w / 6, -d / 2 + d * 0.28); ctx.lineTo(w / 6, d / 2 - 4);
+                ctx.stroke();
+            } else if (f.t === 'toilet') {
+                ctx.beginPath(); ctx.ellipse(0, d * 0.08, w * 0.32, d * 0.3, 0, 0, 7); ctx.stroke();
+                ctx.strokeRect(-w * 0.3, -d / 2 + 4, w * 0.6, d * 0.24);
+            } else if (f.t === 'dtable' || f.t === 'ctable' || f.t === 'desk') {
+                ctx.strokeRect(-w / 2 + 6, -d / 2 + 6, w - 12, d - 12);
+            }
+            /* 名称 */
+            if (cam.zoom > 0.06 && w > 34) {
+                ctx.fillStyle = 'rgba(10,16,28,0.85)';
+                ctx.font = 'bold ' + Math.max(9, Math.min(13, w / 5)) + 'px sans-serif';
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(t.name.length > 4 ? t.name.slice(0, 4) : t.name, 0, 0);
+            }
+            ctx.restore();
+            ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+        }
+
+        /* ---------- 2D 指针交互 ---------- */
+        cv.addEventListener('pointerdown', function (e) {
+            if (mode !== '2d') return;
+            cv.setPointerCapture(e.pointerId);
+            var rect = cv.getBoundingClientRect();
+            var sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+            var wpt = s2w(sx, sy);
+
+            if (tool === 'measure') {
+                measure = { x1: wpt.x, y1: wpt.y, x2: wpt.x, y2: wpt.y };
+                drag = { type: 'measure' };
+                draw2D(); return;
+            }
+            if (tool === 'demowall') {
+                var wi = wallAt(wpt.x, wpt.y);
+                if (wi >= 0) {
+                    if (plan.walls[wi].bearing) { toast('承重墙不可拆改'); return; }
+                    snapshot();
+                    plan.walls.splice(wi, 1);
+                    sel = -1; afterPlanChange();
+                    toast('墙体已拆除（可撤销）');
+                } else toast('请点击要拆除的非承重墙');
+                return;
+            }
+
+            /* 选择/拖拽家具 */
+            var fi = furnAt(wpt.x, wpt.y);
+            if (fi >= 0) {
+                sel = fi;
+                snapshot();
+                drag = { type: 'furn', idx: fi, offx: wpt.x - plan.furniture[fi].x, offy: wpt.y - plan.furniture[fi].y };
+                updateSelInfo();
+                draw2D();
+            } else {
+                sel = -1; updateSelInfo();
+                drag = { type: 'pan', sx: sx, sy: sy, cx: cam.x, cy: cam.y };
+                draw2D();
+            }
+        });
+        cv.addEventListener('pointermove', function (e) {
+            if (mode !== '2d') return;
+            var rect = cv.getBoundingClientRect();
+            mouse.x = e.clientX - rect.left; mouse.y = e.clientY - rect.top;
+            if (!drag) return;
+            var wpt = s2w(mouse.x, mouse.y);
+            if (drag.type === 'pan') {
+                cam.x = drag.cx - (mouse.x - drag.sx) / cam.zoom;
+                cam.y = drag.cy - (mouse.y - drag.sy) / cam.zoom;
+                draw2D();
+            } else if (drag.type === 'furn') {
+                var f = plan.furniture[drag.idx];
+                f.x = Math.round(wpt.x - drag.offx);
+                f.y = Math.round(wpt.y - drag.offy);
+                draw2D();
+            } else if (drag.type === 'measure') {
+                measure.x2 = wpt.x; measure.y2 = wpt.y;
+                draw2D();
+            }
+        });
+        cv.addEventListener('pointerup', function () { drag = null; });
+        cv.addEventListener('wheel', function (e) {
+            if (mode !== '2d') return;
+            e.preventDefault();
+            var factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+            var rect = cv.getBoundingClientRect();
+            var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+            var before = s2w(mx, my);
+            cam.zoom = Math.max(0.03, Math.min(1.2, cam.zoom * factor));
+            var after = s2w(mx, my);
+            cam.x += before.x - after.x;
+            cam.y += before.y - after.y;
+            draw2D();
+        }, { passive: false });
+
+        /* ---------- 家具操作 ---------- */
+        function rotateSel(deg) {
+            if (sel < 0) return;
+            snapshot();
+            plan.furniture[sel].rot = ((plan.furniture[sel].rot + deg) % 360 + 360) % 360;
+            draw2D(); updateSelInfo();
+        }
+        function deleteSel() {
+            if (sel < 0) return;
+            snapshot();
+            plan.furniture.splice(sel, 1);
+            sel = -1; updateSelInfo(); afterPlanChange();
+        }
+        function duplicateSel() {
+            if (sel < 0) return;
+            snapshot();
+            var f = JSON.parse(JSON.stringify(plan.furniture[sel]));
+            f.x += 300; f.y += 300;
+            plan.furniture.push(f);
+            sel = plan.furniture.length - 1;
+            updateSelInfo(); afterPlanChange(); draw2D();
+        }
+        function updateSelInfo() {
+            var el = $('sel-info');
+            if (sel < 0 || !plan.furniture[sel]) { el.innerHTML = '未选中家具。<br>从左侧家具库点击添加。'; return; }
+            var f = plan.furniture[sel], t = FURN_BY_ID[f.t];
+            el.innerHTML = '已选中：<b>' + t.name + '</b><br>尺寸 ' + t.w + '×' + t.d + 'mm · 旋转 ' + f.rot + '°<br>' +
+                '<span style="color:var(--accent)">R 旋转90° · Delete 删除<br>Ctrl+D 复制 · 拖动移动</span>';
+        }
+
+        /* ---------- 键盘 ---------- */
+        window.addEventListener('keydown', function (e) {
+            var tag = (document.activeElement || {}).tagName;
+            if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+            if (e.ctrlKey || e.metaKey) {
+                if (e.code === 'KeyZ' && !e.shiftKey) { undo(); e.preventDefault(); }
+                if ((e.code === 'KeyZ' && e.shiftKey) || e.code === 'KeyY') { redo(); e.preventDefault(); }
+                if (e.code === 'KeyD') { duplicateSel(); e.preventDefault(); }
+                return;
+            }
+            switch (e.code) {
+                case 'KeyT':
+                    setMode(mode === '2d' ? '3d' : '2d'); break;
+                case 'KeyV':
+                    if (mode === '2d') setTool('select'); break;
+                case 'KeyM':
+                    if (mode === '2d') setTool('measure'); break;
+                case 'KeyX':
+                    if (mode === '2d') setTool('demowall'); break;
+                case 'KeyR':
+                    rotateSel(e.shiftKey ? -90 : 90); break;
+                case 'Delete': case 'Backspace':
+                    deleteSel(); e.preventDefault(); break;
+                case 'KeyF':
+                    fitView(); if (mode === '3d' && window.Floor3D) window.Floor3D.fit(); break;
+                case 'Escape':
+                    if (tool !== 'select') setTool('select');
+                    else if (mode === '3d' && window.Floor3D) window.Floor3D.exitWalk();
+                    break;
+            }
+        });
+
+        /* ---------- 工具与模式切换 ---------- */
+        function setTool(t) {
+            tool = t;
+            $('btn-measure').classList.toggle('on', t === 'measure');
+            $('btn-demowall').classList.toggle('on', t === 'demowall');
+            $('mode-tip').textContent = t === 'measure' ? '测量：点击起点与终点（Shift 锁水平/垂直）'
+                : t === 'demowall' ? '拆墙：点击非承重墙拆除（承重墙不可拆）'
+                : '2D：拖动家具 · R 旋转 · Delete 删除 · 滚轮缩放 · 空白处拖动平移';
+            measure = null; draw2D();
+        }
+        function setMode(m) {
+            mode = m;
+            $('m-2d').classList.toggle('on', m === '2d');
+            $('m-3d').classList.toggle('on', m === '3d');
+            $('m-walk').style.display = m === '3d' ? 'inline-block' : 'none';
+            $('m-orbit').style.display = m === '3d' ? 'inline-block' : 'none';
+            $('sunbox').classList.toggle('on', m === '3d');
+            $('lib').style.display = m === '2d' ? 'block' : 'none';
+            cv.style.display = m === '2d' ? 'block' : 'none';
+            $('cv3d').style.display = m === '3d' ? 'block' : 'none';
+            if (m === '3d') {
+                enter3D();
+            } else {
+                if (window.Floor3D) window.Floor3D.leave();
+                fitView();
+                setTool('select');
+            }
+        }
+        function enter3D() {
+            if (!window.THREE) { toast('Three.js 加载失败，请检查网络'); setMode('2d'); return; }
+            if (!window.Floor3D) { toast('3D 模块加载失败'); setMode('2d'); return; }
+            window.Floor3D.enter($('cv3d'), plan, FURN_BY_ID);
+            window.Floor3D.resize();
+            $('mode-tip').textContent = '3D 鸟瞰：拖动旋转 · 滚轮缩放 · 点击漫游进入第一人称（WASD 移动 / 触屏左摇杆）';
+            setTool('select');
+        }
+
+        /* ============================================================
+         * 五、右侧面板
+         * ============================================================ */
+        function renderRoomsPanel() {
+            var el = $('rooms');
+            el.innerHTML = '';
+            plan.rooms.forEach(function (r, i) {
+                var row = document.createElement('div');
+                row.className = 'room-row';
+                var area = (r.w * r.h / 1e6).toFixed(1);
+                var sel2 = '<select data-i="' + i + '">';
+                for (var k in MATS) {
+                    sel2 += '<option value="' + k + '"' + (r.mat === k ? ' selected' : '') + '>' + MATS[k].name + '</option>';
+                }
+                sel2 += '</select>';
+                row.innerHTML = '<span>' + r.name + '</span><span class="area">' + area + '㎡</span>' + sel2;
+                row.addEventListener('click', function (e) {
+                    if (e.target.tagName === 'SELECT') return;
+                    if (mode === '3d' && window.Floor3D) window.Floor3D.focusRoom(i);
+                });
+                row.querySelector('select').addEventListener('change', function () {
+                    snapshot();
+                    r.mat = this.value;
+                    afterPlanChange();
+                });
+                el.appendChild(row);
+            });
+        }
+        function renderStats() {
+            var total = 0, cost = 0;
+            plan.rooms.forEach(function (r) {
+                var area = r.w * r.h / 1e6;
+                total += area;
+                cost += area * 1.05 * (MATS[r.mat] ? MATS[r.mat].price : 0);
+            });
+            $('stats').innerHTML =
+                '套内使用面积：<b>' + total.toFixed(1) + '</b> ㎡<br>' +
+                '地板预估造价（含 5% 损耗）：<br><b>¥ ' + Math.round(cost).toLocaleString() + '</b><br>' +
+                '家具数量：<b>' + plan.furniture.length + '</b> 件';
+        }
+
+        /* ---------- 家具库 ---------- */
+        function renderLib() {
+            var el = $('lib');
+            el.innerHTML = '';
+            var groups = {};
+            FURN.forEach(function (f) { (groups[f.g] = groups[f.g] || []).push(f); });
+            Object.keys(groups).forEach(function (g) {
+                var h = document.createElement('h4');
+                h.textContent = g;
+                el.appendChild(h);
+                groups[g].forEach(function (f) {
+                    var d = document.createElement('div');
+                    d.className = 'lib-item';
+                    d.innerHTML = '<span class="dot" style="background:' + f.c + '"></span>' + f.name;
+                    d.addEventListener('click', function () {
+                        if (mode !== '2d') { toast('请先切回 2D 平面'); return; }
+                        snapshot();
+                        plan.furniture.push({ t: f.id, x: Math.round(cam.x), y: Math.round(cam.y), rot: 0 });
+                        sel = plan.furniture.length - 1;
+                        updateSelInfo(); afterPlanChange(); draw2D();
+                        toast('已添加 ' + f.name + '，拖动摆放');
+                    });
+                    el.appendChild(d);
+                });
+            });
+        }
+
+        /* ---------- 导出/导入/PNG ---------- */
+        function download(name, dataurl) {
+            var a = document.createElement('a');
+            a.href = dataurl; a.download = name;
+            a.click();
+        }
+        $('btn-export-json').addEventListener('click', function () {
+            download('floorplan.json', 'data:application/json,' + encodeURIComponent(JSON.stringify(plan)));
+            toast('方案已导出');
+        });
+        $('btn-import-json').addEventListener('click', function () { $('file-json').click(); });
+        $('file-json').addEventListener('change', function () {
+            var f = this.files[0]; if (!f) return;
+            var r = new FileReader();
+            r.onload = function () {
+                try {
+                    var p = JSON.parse(r.result);
+                    if (!p.walls || !p.rooms || !p.furniture) throw 0;
+                    snapshot();
+                    plan = p; sel = -1;
+                    afterPlanChange();
+                    toast('方案已导入');
+                } catch (e) { toast('导入失败：不是有效的方案文件'); }
+            };
+            r.readAsText(f);
+            this.value = '';
+        });
+        $('btn-png').addEventListener('click', function () {
+            var url;
+            if (mode === '3d' && window.Floor3D) url = window.Floor3D.screenshot();
+            else url = cv.toDataURL('image/png');
+            download('floorplan.png', url);
+            toast('PNG 已导出');
+        });
+        $('btn-undo').addEventListener('click', undo);
+        $('btn-redo').addEventListener('click', redo);
+        $('btn-reset-plan').addEventListener('click', function () {
+            snapshot();
+            plan = defaultPlan(); sel = -1;
+            afterPlanChange();
+            if (mode === '2d') fitView();
+            toast('已恢复默认户型');
+        });
+        $('btn-measure').addEventListener('click', function () { setTool(tool === 'measure' ? 'select' : 'measure'); });
+        $('btn-demowall').addEventListener('click', function () { setTool(tool === 'demowall' ? 'select' : 'demowall'); });
+        $('btn-fit').addEventListener('click', function () {
+            fitView();
+            if (mode === '3d' && window.Floor3D) window.Floor3D.fit();
+        });
+        $('m-2d').addEventListener('click', function () { if (mode !== '2d') setMode('2d'); });
+        $('m-3d').addEventListener('click', function () { if (mode !== '3d') setMode('3d'); });
+        $('m-walk').addEventListener('click', function () {
+            if (window.Floor3D) { window.Floor3D.setWalk(true); toast('漫游：WASD 移动 · 鼠标转视角 · Esc 退出'); }
+        });
+        $('m-orbit').addEventListener('click', function () {
+            if (window.Floor3D) window.Floor3D.setWalk(false);
+        });
+        $('sun').addEventListener('input', function () {
+            if (window.Floor3D) window.Floor3D.setSun(+this.value);
+        });
+        $('night').addEventListener('change', function () {
+            if (window.Floor3D) window.Floor3D.setNight(this.checked);
+        });
+        $('section').addEventListener('change', function () {
+            if (window.Floor3D) window.Floor3D.setSection(this.checked);
+        });
+
+        /* ============================================================
+         * 六、启动
+         * ============================================================ */
+        plan = loadPlan();
+        renderLib();
+        renderRoomsPanel();
+        renderStats();
+        fitView();
+        updateSelInfo();
+    })();
+    </script>
+</body>
+
+</html>
